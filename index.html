@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ferretería Don Ramon</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+  </head>
+  <body>
+    <style>
+      body {
+        height: 100vh;
+        width: auto;
+        overflow: hidden;
+      }
+
+      .center {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .cursor-pointer {
+        cursor: pointer;
+      }
+
+      .hover-btn {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .hover-btn:hover {
+        transform: translateY(-10px) scale(1.05);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+
+      .center {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .h-10 {
+        height: 10%;
+      }
+
+      .h-90 {
+        height: 90%;
+      }
+
+      /* ::-webkit-scrollbar {
+            display: none;
+        } */
+    </style>
+
+    <div class="container h-100">
+      <nav class="navbar h-10">
+        <div class="container-fluid">
+          <a class="navbar-brand mx-auto" href="#" id="home">
+            <i class="bi bi-house-fill"></i>
+          </a>
+        </div>
+      </nav>
+      <div class="row overflow-auto pt-4 pb-4" id="main"></div>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+      window.onload = async function () {
+        new Components().home();
+      };
+
+      class Utils {
+        async fileToJSON(e) {
+          const file = e.files[0];
+
+          return new Promise((resolve, reject) => {
+            switch (file.type) {
+              case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                  const data = new Uint8Array(e.target.result);
+                  const workbook = XLSX.read(data, { type: "array" });
+                  const sheetName = workbook.SheetNames[0];
+                  const worksheet = workbook.Sheets[sheetName];
+                  const json = XLSX.utils.sheet_to_json(worksheet);
+                  resolve(json);
+                };
+
+                reader.onerror = function (error) {
+                  reject(error);
+                };
+
+                reader.readAsArrayBuffer(file);
+
+                break;
+            }
+          });
+        }
+
+        async filterJSON({ json, settings }) {
+          const requiredKeys = Object.keys(settings);
+
+          const filteredJSON = json.filter((item) => {
+            return requiredKeys.every(
+              (key) =>
+                item[key] !== "" &&
+                item[key] !== undefined &&
+                item[key] !== null &&
+                item[key] !== " "
+            );
+          });
+
+          filteredJSON.shift();
+
+          const transformedJSON = filteredJSON.map((item) => {
+            const newItem = {};
+            requiredKeys.forEach((key) => {
+              let value = item[key];
+              if (typeof value === "number") {
+                value = parseFloat(value.toFixed(2));
+              }
+              newItem[settings[key]] = value;
+            });
+            return newItem;
+          });
+
+          return transformedJSON;
+        }
+
+        createTable({ JSON: data, container, alter, actions = false }) {
+          const tableContainer = document.querySelector(container);
+
+          if (!Array.isArray(data) || !tableContainer) {
+            console.error("Invalid data or container");
+            return;
+          }
+
+          tableContainer.innerHTML = "";
+
+          const table = document.createElement("table");
+          table.className = "table table-striped table-hover";
+
+          const thead = document.createElement("thead");
+          thead.className = "thead-light";
+          const tbody = document.createElement("tbody");
+
+          table.appendChild(thead);
+          table.appendChild(tbody);
+
+          const headerRow = document.createElement("tr");
+
+          if (actions) {
+            const th = document.createElement("th");
+            th.textContent = "Acciones";
+            th.className = "text-center";
+            headerRow.appendChild(th);
+          }
+
+          Object.keys(alter).forEach((key) => {
+            const th = document.createElement("th");
+            th.textContent = alter[key];
+            th.className = "text-center";
+            headerRow.appendChild(th);
+          });
+
+          thead.appendChild(headerRow);
+
+          data.forEach((item) => {
+            const row = document.createElement("tr");
+
+            if (actions) {
+              const actionTd = document.createElement("td");
+              actionTd.className = "text-center";
+              const actionButton = document.createElement("button");
+              actionButton.textContent = "...";
+              actionButton.className = "btn btn-secondary btn-sm";
+              actionButton.onclick = () => console.log(item);
+              actionTd.appendChild(actionButton);
+              row.appendChild(actionTd);
+            }
+
+            Object.keys(alter).forEach((key) => {
+              const td = document.createElement("td");
+              td.textContent = item[key] || "";
+              td.className = "text-center";
+              row.appendChild(td);
+            });
+
+            tbody.appendChild(row);
+          });
+
+          tableContainer.appendChild(table);
+        }
+
+        modal({ title, message, type, boolean, default: defaultButtons }) {
+          if (!message || !type) {
+            console.log(
+              `Error: Se requieren los parámetros "message" y "type".`
+            );
+            return;
+          }
+          if (![`success`, `error`, `warning`].includes(type)) {
+            console.log(
+              `Error: El tipo debe ser "success", "error" o "warning".`
+            );
+            return;
+          }
+
+          let overlay = document.createElement(`div`);
+          overlay.classList.add(`modal`, `fade`, `show`);
+          overlay.style.cssText = `background-color: rgba(0, 0, 0, 0.5); position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 1050;`;
+          overlay.setAttribute(`data-backdrop`, `static`);
+
+          let modalContent = document.createElement(`div`);
+          modalContent.classList.add(`modal-dialog`);
+          modalContent.style.maxWidth = `400px`;
+
+          let modalBody = document.createElement(`div`);
+          modalBody.classList.add(`modal-content`);
+          modalBody.style.backgroundColor = `white`;
+
+          let modalHeader = document.createElement(`div`);
+          modalHeader.classList.add(`modal-header`);
+          modalHeader.innerHTML = `<h5 class="modal-title">${
+            title ||
+            (type === `success`
+              ? `Éxito`
+              : type === `error`
+              ? `Error`
+              : `Advertencia`)
+          }</h5>`;
+
+          let modalText = document.createElement(`div`);
+          modalText.classList.add(`modal-body`);
+          modalText.innerText = message;
+
+          let modalFooter = document.createElement(`div`);
+          modalFooter.classList.add(`modal-footer`);
+
+          if (
+            boolean &&
+            Array.isArray(boolean) &&
+            (boolean.length === 2 || boolean.length === 1)
+          ) {
+            boolean.forEach((btn) => {
+              let key = Object.keys(btn)[0];
+              let [text, func, color] = btn[key];
+              let defaultFunc = () => {
+                overlay.remove();
+              };
+              let button = document.createElement(`button`);
+              button.type = `button`;
+              button.classList.add(
+                `btn`,
+                key === `yes` ? `btn-primary` : `btn-secondary`
+              );
+              button.innerText = text;
+              button.style.backgroundColor = color || ``;
+              button.addEventListener(`click`, () => {
+                func ? func() : defaultFunc();
+              });
+              modalFooter.appendChild(button);
+            });
+          } else {
+            console.log(`Error: Los botones no están definidos correctamente.`);
+          }
+
+          if (
+            defaultButtons &&
+            Array.isArray(defaultButtons) &&
+            defaultButtons.length > 0
+          ) {
+            defaultButtons.forEach((btn) => {
+              let key = Object.keys(btn)[0];
+              let [text, func, color] = btn[key];
+              let defaultFunc = () => {
+                overlay.remove();
+              };
+              let button = document.createElement(`button`);
+              button.type = `button`;
+              button.classList.add(`btn`, `btn-primary`);
+              button.innerText = text;
+              button.style.backgroundColor = color || `green`;
+              button.addEventListener(`click`, () => {
+                func ? func() : defaultFunc();
+              });
+              modalFooter.appendChild(button);
+            });
+          }
+
+          modalBody.appendChild(modalHeader);
+          modalBody.appendChild(modalText);
+          modalBody.appendChild(modalFooter);
+          modalContent.appendChild(modalBody);
+          overlay.appendChild(modalContent);
+          document.body.appendChild(overlay);
+
+          overlay.addEventListener(`click`, function (e) {
+            if (e.target === overlay) {
+              e.stopPropagation();
+            }
+          });
+        }
+
+        preloader() {
+          const preloader = document.getElementById(`preloader`);
+          if (preloader) {
+            preloader.remove();
+          } else {
+            const modalContainer = document.createElement(`div`);
+            modalContainer.classList.add(`modal-container`, `center`);
+            modalContainer.id = `preloader`;
+            modalContainer.style.position = `fixed`;
+            modalContainer.style.top = `0%`;
+            modalContainer.style.left = `0%`;
+            modalContainer.style.width = `100vw`;
+            modalContainer.style.height = `100vh`;
+            modalContainer.style.backdropFilter = `blur(10px)`;
+            modalContainer.style.webkitBackdropFilter = `blur(10px)`;
+            modalContainer.style.transition = `visibility 0s linear 0.30s, opacity 0.30s ease-in-out`;
+            modalContainer.style.zIndex = `99999999999999`;
+
+            const spinner = document.createElement(`div`);
+            spinner.classList.add(`spinner`);
+            spinner.style.width = `100px`;
+            spinner.style.height = `100px`;
+            spinner.style.border = `7px solid rgb(65, 65, 65)`;
+            spinner.style.borderTopColor = `transparent`;
+            spinner.style.borderRadius = `50%`;
+            spinner.style.animation = `spinner 0.7s linear infinite`;
+            spinner.style.transition = `all 0.2s ease-in-out`;
+
+            const keyframesStyle = document.getElementById(`spinnerKeyframes`);
+            if (!keyframesStyle) {
+              const newKeyframesStyle = document.createElement(`style`);
+              newKeyframesStyle.id = `spinnerKeyframes`;
+              newKeyframesStyle.innerHTML = `
+                            @keyframes spinner {
+                                from {}
+                                to {
+                                    transform: rotate(360deg);
+                                }
+                            }`;
+              document.head.appendChild(newKeyframesStyle);
+            }
+
+            modalContainer.appendChild(spinner);
+            document.body.appendChild(modalContainer);
+          }
+        }
+      }
+
+      class FormEvents {
+        constructor() {
+          this.init();
+        }
+
+        init() {
+          this.forms = document.querySelectorAll(`form`);
+          this.forms.forEach((form) => {
+            form.addEventListener(`submit`, (event) =>
+              this.handleSubmit(event, form)
+            );
+          });
+        }
+
+        async handleSubmit(event, form) {
+          event.preventDefault();
+          let data = this.captureFormData(form);
+          let extra = parseInt(form.getAttribute(`data-extra`));
+
+          let settings = {
+            body: data,
+            method: form.getAttribute(`data-method`),
+            table: form.getAttribute(`data-table`),
+            type: parseFloat(form.getAttribute(`data-type`)),
+            modal: parseInt(form.getAttribute(`data-modal`)),
+          };
+
+          console.log(settings);
+
+          switch (extra) {
+            case 1:
+              const e = document.getElementById("listFile");
+              let u = new Utils();
+              let js = await u.fileToJSON(e);
+              console.log(js);
+
+              let s = await new API().Fetch({
+                method: "GET",
+                table: "provider",
+                type: 1,
+                body: data,
+              });
+
+              console.log(JSON.parse(s.data));
+
+              let filtered = await u.filterJSON({
+                json: js,
+                settings: JSON.parse(s.data),
+              });
+              console.log(filtered);
+
+              settings.body = {
+                providerId: settings.body.sId,
+                productsData: filtered,
+              };
+
+              break;
+
+            case 2:
+              try {
+                const jsonConfig = JSON.parse(data.config);
+                console.log("El JSON es válido:", jsonConfig);
+              } catch (error) {
+                alert(
+                  "El valor de configuración para el proveedor no es un JSON válido"
+                );
+                console.error(
+                  "El valor de configuración para el proveedor no es un JSON válido:",
+                  error
+                );
+                return;
+              }
+
+              break;
+          }
+
+          let response = await new API().Fetch(settings);
+
+          if (response) {
+            settings.response = response;
+            this.actionPostSubmit(settings);
+          }
+        }
+
+        actionPostSubmit({ table, type, response, modal }) {
+          console.log(response);
+
+          switch (table) {
+            case "products":
+              switch (type) {
+                case 0:
+                  new Utils().createTable({
+                    JSON: response.data,
+                    container: `#${table}`,
+                    alter: {
+                      provider_name: "Proveedor",
+                      code: "Código",
+                      description: "Descripción",
+                      price: "Precio",
+                    },
+                  });
+
+                  break;
+
+                default:
+                  if (modal === 1) {
+                    if (response && String(response.status).startsWith(`20`)) {
+                      new Utils().modal({
+                        title: `Éxito`,
+                        message: `Consulta realizada con éxito`,
+                        type: `success`,
+                        default: [{ yes: [`Aceptar`, null, `green`] }],
+                      });
+                    } else {
+                      new Utils().modal({
+                        title: `Error`,
+                        message: `No se pudo realizar la consulta`,
+                        type: `error`,
+                        default: [{ yes: [`Aceptar`, null, `red`] }],
+                      });
+                    }
+                  }
+
+                  break;
+              }
+
+              break;
+
+            default:
+              if (modal === 1) {
+                if (response && String(response.status).startsWith(`20`)) {
+                  new Utils().modal({
+                    title: `Éxito`,
+                    message: `Consulta realizada con éxito`,
+                    type: `success`,
+                    default: [{ yes: [`Aceptar`, null, `green`] }],
+                  });
+                } else {
+                  new Utils().modal({
+                    title: `Error`,
+                    message: `No se pudo realizar la consulta`,
+                    type: `error`,
+                    default: [{ yes: [`Aceptar`, null, `red`] }],
+                  });
+                }
+              }
+              break;
+          }
+        }
+
+        captureFormData(form) {
+          let inputs = form.querySelectorAll(`input, select, textarea`);
+          let formDataObject = {};
+          inputs.forEach((input) => {
+            formDataObject[input.name] = input.value;
+          });
+          return formDataObject;
+        }
+      }
+
+      class API {
+        async Fetch(data) {
+          let options = this.getOptions(data);
+          console.log(options);
+          try {
+            new Utils().preloader();
+            let response = await fetch(options[1], options[0]);
+            let contentType = response.headers.get(`Content-Type`);
+            new Utils().preloader();
+            let responseData = contentType.includes(`application/json`)
+              ? await response.json()
+              : await response.text();
+            return {
+              data: contentType.includes(`application/json`)
+                ? responseData
+                : { message: responseData },
+              status: response.status,
+            };
+          } catch (error) {
+            return { error: error };
+          }
+        }
+
+        getOptions({ method, table, type, body }) {
+          let url = ``;
+
+          switch (table) {
+            case `products`:
+              switch (type) {
+                case 0:
+                  url = `https://donramonhardwarestoreapi.onrender.com/api/products/search?term=${body.searchProduct}`;
+                  break;
+                case 1:
+                  url = `https://donramonhardwarestoreapi.onrender.com/api/products/create-in-batch`;
+                  break;
+              }
+              break;
+            case `provider`:
+              switch (type) {
+                case 0:
+                  url = `https://donramonhardwarestoreapi.onrender.com/api/providers`;
+                  break;
+                case 1:
+                  url = `https://donramonhardwarestoreapi.onrender.com/api/providers/${body.sId}/config`;
+                  break;
+              }
+              break;
+          }
+
+          let options = [
+            {
+              method: method,
+              headers: {
+                "Content-Type": "application/json",
+              },
+            },
+            url,
+          ];
+
+          if (method === `POST` || method === `PUT` || method === `PATCH`) {
+            options[0].body = JSON.stringify(body);
+          }
+
+          return options;
+        }
+      }
+
+      class Components {
+        constructor() {
+          this.html = ``;
+          this.main = document.querySelector(`#main`);
+        }
+
+        putMain(code) {
+          this.main.innerHTML = code;
+        }
+
+        home() {
+          this.html = `
+                    <div class="col-md-12 mx-auto">
+                        <div class="row justify-content-center">
+
+                            <div class="col-md-4 mb-2 cursor-pointer hover-btn" id="addProveedor">
+                                <div class="card text-center bg-success text-white">
+                                    <div class="card-body p-5">
+                                        <h6 class="card-title">Añadir Proveedor</h6>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 cursor-pointer hover-btn" id="addLista">
+                                <div class="card text-center bg-danger text-white">
+                                    <div class="card-body p-5">
+                                        <h6 class="card-title">Cargar Lista</h6>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 cursor-pointer hover-btn" id="searchProduct">
+                                <div class="card text-center bg-warning text-dark">
+                                    <div class="card-body p-5">
+                                        <h6 class="card-title">Buscar Productos</h6>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                `;
+
+          this.putMain(this.html);
+
+          document.querySelector(`#home`).addEventListener(`click`, () => {
+            this.home();
+          });
+
+          document
+            .querySelector(`#addProveedor`)
+            .addEventListener(`click`, () => {
+              this.addProveedor();
+            });
+
+          document.querySelector(`#addLista`).addEventListener(`click`, () => {
+            this.uploadList();
+          });
+
+          document
+            .querySelector(`#searchProduct`)
+            .addEventListener(`click`, () => {
+              this.getProducts();
+            });
+        }
+
+        async addProveedor() {
+          this.html = `
+                <div class="col-md-12">
+                    <form class="row" data-extra="2" data-modal="1" data-type="0" data-table="provider" data-method="POST">
+                        <div class="mb-3 col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="name" name="name" placeholder="Nombre del Proveedor" required>
+                                <label for="name">Nombre del Proveedor</label>
+                            </div>
+                        </div>
+                        <div class="mb-3 col-md-4">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="email" name="email" placeholder="Correo Electrónico">
+                                <label for="email">Correo Electrónico</label>
+                            </div>
+                        </div>
+                        <div class="mb-3 col-md-4">
+                            <div class="form-floating">
+                                <input type="tel" class="form-control" id="telephone" name="telephone" placeholder="Teléfono/Celular">
+                                <label for="telephone">Teléfono/Celular</label>
+                            </div>
+                        </div>
+                        <div class="mb-3 col-md-4">
+                            <div class="form-floating">
+                                <textarea name="config" id="config" class="form-control" placeholder="Configuración" required></textarea>
+                                <label for="config">Configuración</label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </form>
+                </div>
+            `;
+
+          this.putMain(this.html);
+
+          new FormEvents();
+        }
+
+        async getProducts() {
+          this.html = `
+
+                    <div class="col-md-12">
+                        <form class="row" data-extra="0" data-modal="0" data-type="0" data-table="products" data-method="GET">
+                            <div class="mb-4 col-md-3">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="searchProduct" name="searchProduct" placeholder="Código o Nombre del Producto" aria-label="Código o Nombre del Producto" aria-describedby="button-addon2">
+                                    <button class="btn btn-outline-secondary" type="submit" id="button-addon2"><i class="bi bi-search"></i></button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="col-md-12" style="max-height: 60vh;">
+                        <div class="container" id="products"></div>
+                    </div>
+
+                `;
+
+          this.putMain(this.html);
+
+          new FormEvents();
+        }
+
+        async uploadList() {
+          this.html = `
+
+                    <div class="col-md-12">
+                        <form class="row" data-extra="1" data-modal="1" data-type="1" data-table="products" data-method="POST">
+                            <div class="mb-3 col-md-4">
+                                <div class="form-floating">
+                                    <select class="form-control" id="sId" name="sId" required>
+                                        <option value="" disabled selected>Seleccione un Proveedor</option>
+                                    </select>
+                                    <label for="sId">Nombre del Proveedor</label>
+                                </div>
+                            </div>
+                            <div class="mb-3 col-md-4">
+                                <div class="form-floating">
+                                    <input type="file" class="form-control" id="listFile" name="listFile" accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/pdf" required>
+                                    <label for="listFile">Cargar Lista de Productos (CSV, Excel, PDF)</label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Cargar Lista</button>
+                        </form>
+                    </div>
+
+                `;
+
+          this.putMain(this.html);
+
+          let p = await new API().Fetch({
+            method: `GET`,
+            table: `provider`,
+            type: 0,
+          });
+
+          console.log(p);
+
+          p.data.forEach((provider) =>
+            document
+              .getElementById(`sId`)
+              .appendChild(new Option(provider.name, provider.id))
+          );
+
+          new FormEvents();
+        }
+      }
+    </script>
+  </body>
+</html>

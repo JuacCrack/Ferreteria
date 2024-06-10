@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+
+    <input type="file" id="fileInput" />
+
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleFile, false);
+      
+        function handleFile(e) {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+      
+          reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet);
+            console.log(json);
+          };
+      
+          reader.readAsArrayBuffer(file);
+        }
+      </script>
+
+      <div class="col-md-12">
+        <form class="row">
+          <div class="mb-3 col-md-4">
+              <div class="form-floating">
+                  <select class="form-control" id="sId" name="sId" required>
+                      <option value="" disabled selected>Seleccione un Proveedor</option>
+                  </select>
+                  <label for="sId">Nombre del Proveedor</label>
+              </div>
+          </div>
+          <div class="mb-3 col-md-4">
+              <div class="form-floating">
+                  <input type="file" class="form-control" id="productFile" name="productFile" accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/pdf" required>
+                  <label for="productFile">Cargar Lista de Productos (CSV, Excel, PDF)</label>
+              </div>
+          </div>
+          <div class="col-md-4">
+              <button type="submit" class="btn btn-primary btn-block mt-3">Cargar</button>
+          </div>
+      </form>
+      </div>
+      
+
+</body>
+</html>
